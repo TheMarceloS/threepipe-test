@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GESTURE CITY</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Bebas+Neue&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #000;
+    overflow: hidden;
+    font-family: 'DM Mono', monospace;
+    color: #fff;
+  }
+
+  #three-canvas {
+    position: fixed; top: 0; left: 0;
+    width: 100vw; height: 100vh; z-index: 0;
+  }
+
+  /* ── Video pip ── */
+  #video-container {
+    position: fixed; bottom: 24px; right: 24px;
+    z-index: 10; width: 180px; height: 135px;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 4px; overflow: hidden; background: #000;
+    box-shadow: 0 0 30px rgba(0,0,0,0.8);
+  }
+  #webcam {
+    width: 100%; height: 100%; object-fit: cover;
+    transform: scaleX(-1); opacity: 0.9;
+  }
+  #hand-canvas {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%; transform: scaleX(-1);
+  }
+
+  /* ── Gesture badge ── */
+  #gesture-badge {
+    position: fixed; top: 30px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 10; text-align: center;
+    pointer-events: none;
+  }
+  #building-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 32px; letter-spacing: 6px;
+    color: #fff; opacity: 0;
+    transition: opacity 0.4s;
+    text-shadow: 0 0 40px var(--glow, #fff);
+  }
+  #building-name.show { opacity: 1; }
+  #gesture-sub {
+    font-size: 10px; letter-spacing: 3px;
+    color: rgba(255,255,255,0.45); margin-top: 4px;
+    opacity: 0; transition: opacity 0.4s;
+  }
+  #gesture-sub.show { opacity: 1; }
+
+  /* ── Gesture guide ── */
+  #guide {
+    position: fixed; left: 24px; top: 50%;
+    transform: translateY(-50%);
+    z-index: 10; display: flex; flex-direction: column; gap: 10px;
+  }
+  .g-row {
+    display: flex; align-items: center; gap: 10px;
+    opacity: 0.3; transition: opacity 0.35s, transform 0.35s;
+    font-size: 10px; letter-spacing: 1.5px;
+  }
+  .g-row.lit { opacity: 1; transform: translateX(4px); }
+  .g-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--c, #fff); flex-shrink: 0;
+    box-shadow: 0 0 8px var(--c, #fff);
+  }
+  .g-emoji { font-size: 16px; }
+  .g-label { color: rgba(255,255,255,0.65); }
+
+  /* ── Status ── */
+  #status {
+    position: fixed; bottom: 24px; left: 24px;
+    font-size: 9px; letter-spacing: 2px;
+    color: rgba(255,255,255,0.25); z-index: 10;
+    transition: color 0.4s;
+  }
+  #status.ready { color: rgba(120,255,180,0.55); }
+  #status.error { color: rgba(255,80,80,0.65); }
+
+  /* ── Grain overlay ── */
+  #grain {
+    position: fixed; top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.08'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 7; opacity: 0.4;
+  }
+
+  /* ── Vignette ── */
+  #vignette {
+    position: fixed; top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.75) 100%);
+    pointer-events: none; z-index: 6;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="three-canvas"></canvas>
+<div id="grain"></div>
+<div id="vignette"></div>
+
+<div id="gesture-badge">
+  <div id="building-name"></div>
+  <div id="gesture-sub"></div>
+</div>
+
+<div id="guide">
+  <div class="g-row" id="gr-open"   style="--c:#60cfff"><span class="g-dot"></span><span class="g-emoji">🖐</span><span class="g-label">OPEN · CITY HALL</span></div>
+  <div class="g-row" id="gr-point"  style="--c:#ff6b35"><span class="g-dot"></span><span class="g-emoji">👆</span><span class="g-label">POINT · TOWER ONE</span></div>
+  <div class="g-row" id="gr-fist"   style="--c:#ff3366"><span class="g-dot"></span><span class="g-emoji">✊</span><span class="g-label">FIST · PRECINCT</span></div>
+  <div class="g-row" id="gr-peace"  style="--c:#a0ff60"><span class="g-dot"></span><span class="g-emoji">✌️</span><span class="g-label">PEACE · GARDEN SUITES</span></div>
+  <div class="g-row" id="gr-thumb"  style="--c:#ffd700"><span class="g-dot"></span><span class="g-emoji">👍</span><span class="g-label">THUMBS · GRAND HOTEL</span></div>
+  <div class="g-row" id="gr-rock"   style="--c:#bf5fff"><span class="g-dot"></span><span class="g-emoji">🤘</span><span class="g-label">ROCK · NEON PLAZA</span></div>
+</div>
+
+<div id="status">INITIALIZING…</div>
+
+<div id="video-container">
+  <video id="webcam" autoplay playsinline muted></video>
+  <canvas id="hand-canvas"></canvas>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script type="module">
+import { GestureRecognizer, FilesetResolver, DrawingUtils }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs";
+
+// ═══════════════════════════════════════════════════════════════
+//  SCENE SETUP
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('three-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setClearColor(0x050810);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x050810, 80, 260);
+
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 500);
+camera.position.set(0, 38, 90);
+camera.lookAt(0, 10, 0);
+
+// Slow auto-rotate
+let camAngle = 0;
+
+// ═══════════════════════════════════════════════════════════════
+//  LIGHTING BASE
+// ═══════════════════════════════════════════════════════════════
+const ambient = new THREE.AmbientLight(0x0a0f1a, 1.0);
+scene.add(ambient);
+
+const moonLight = new THREE.DirectionalLight(0x1a2a4a, 0.6);
+moonLight.position.set(-30, 60, 40);
+moonLight.castShadow = true;
+scene.add(moonLight);
+
+// ═══════════════════════════════════════════════════════════════
+//  GROUND
+// ═══════════════════════════════════════════════════════════════
+const groundGeo = new THREE.PlaneGeometry(400, 400, 60, 60);
+const groundMat = new THREE.MeshStandardMaterial({
+  color: 0x080c14, roughness: 0.9, metalness: 0.1
+});
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Road grid lines
+function addRoads() {
+  const mat = new THREE.MeshBasicMaterial({ color: 0x0d1520 });
+  for (let x = -120; x <= 120; x += 30) {
+    const g = new THREE.PlaneGeometry(3, 240);
+    const m = new THREE.Mesh(g, mat);
+    m.rotation.x = -Math.PI / 2;
+    m.position.set(x, 0.01, 0);
+    scene.add(m);
+  }
+  for (let z = -120; z <= 120; z += 30) {
+    const g = new THREE.PlaneGeometry(240, 3);
+    const m = new THREE.Mesh(g, mat);
+    m.rotation.x = -Math.PI / 2;
+    m.position.set(0, 0.01, z);
+    scene.add(m);
+  }
+}
+addRoads();
+
+// ═══════════════════════════════════════════════════════════════
+//  BUILDING FACTORY
+// ═══════════════════════════════════════════════════════════════
+
+// Each "key" building has a point light, glow, and window texture
+const KEY_BUILDINGS = [];
+
+function makeMaterial(baseColor) {
+  return new THREE.MeshStandardMaterial({
+    color: baseColor, roughness: 0.7, metalness: 0.3
+  });
+}
+
+function makeWindowTexture(rows, cols, litColor, alpha = 0.0) {
+  const size = 256;
+  const offscreen = document.createElement('canvas');
+  offscreen.width = size; offscreen.height = size;
+  const ctx = offscreen.getContext('2d');
+  ctx.fillStyle = '#060a10';
+  ctx.fillRect(0, 0, size, size);
+
+  const ww = size / cols - 3;
+  const wh = size / rows - 3;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const on = Math.random() > 0.35;
+      ctx.fillStyle = on ? litColor : '#0a0e18';
+      ctx.globalAlpha = on ? 0.9 : 0.3;
+      ctx.fillRect(c * (size / cols) + 2, r * (size / rows) + 2, ww, wh);
+    }
+  }
+  ctx.globalAlpha = 1;
+  const tex = new THREE.CanvasTexture(offscreen);
+  return tex;
+}
+
+function addKeyBuilding({ id, x, z, w, d, h, color, lightColor, name, guideId }) {
+  const group = new THREE.Group();
+  group.position.set(x, 0, z);
+
+  const geo = new THREE.BoxGeometry(w, h, d);
+  const winTex = makeWindowTexture(Math.floor(h / 2), Math.floor(w / 1.5), lightColor, 0);
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x0d1520, roughness: 0.6, metalness: 0.4,
+    emissiveMap: winTex, emissive: new THREE.Color(lightColor), emissiveIntensity: 0.0,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.y = h / 2;
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  group.add(mesh);
+
+  // Rooftop detail
+  const roofGeo = new THREE.BoxGeometry(w * 0.4, h * 0.12, d * 0.4);
+  const roofMesh = new THREE.Mesh(roofGeo, new THREE.MeshStandardMaterial({ color: 0x0a0f1a }));
+  roofMesh.position.y = h + h * 0.06;
+  group.add(roofMesh);
+
+  // Point light (off by default)
+  const ptLight = new THREE.PointLight(new THREE.Color(lightColor), 0, 60, 1.5);
+  ptLight.position.set(0, h * 0.8, 0);
+  group.add(ptLight);
+
+  // Ground halo (rect area approximated with a plane + emissive)
+  const haloGeo = new THREE.CircleGeometry(w * 1.4, 32);
+  const haloMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(lightColor), transparent: true, opacity: 0,
+    depthWrite: false, side: THREE.DoubleSide,
+  });
+  const halo = new THREE.Mesh(haloGeo, haloMat);
+  halo.rotation.x = -Math.PI / 2;
+  halo.position.y = 0.05;
+  group.add(halo);
+
+  scene.add(group);
+
+  KEY_BUILDINGS.push({ id, mesh, mat, ptLight, halo, color, lightColor, name, guideId, lit: false, intensity: 0 });
+  return group;
+}
+
+// ── Key (gesture-assigned) buildings ──────────────────────────
+addKeyBuilding({ id:'open',  x:-22, z:-5,  w:14, d:12, h:38, color:0x0d1828, lightColor:'#60cfff', name:'CITY HALL',      guideId:'gr-open'  });
+addKeyBuilding({ id:'point', x: 4,  z:-8,  w:10, d:10, h:62, color:0x0d1520, lightColor:'#ff6b35', name:'TOWER ONE',      guideId:'gr-point' });
+addKeyBuilding({ id:'fist',  x:-8,  z: 14, w:16, d:14, h:28, color:0x120810, lightColor:'#ff3366', name:'THE PRECINCT',   guideId:'gr-fist'  });
+addKeyBuilding({ id:'peace', x: 20, z: 10, w:12, d:10, h:34, color:0x08120a, lightColor:'#a0ff60', name:'GARDEN SUITES',  guideId:'gr-peace' });
+addKeyBuilding({ id:'thumb', x:-2,  z: 22, w:18, d:16, h:44, color:0x14100a, lightColor:'#ffd700', name:'GRAND HOTEL',    guideId:'gr-thumb' });
+addKeyBuilding({ id:'rock',  x: 28, z:-2,  w:10, d:8,  h:52, color:0x0d0814, lightColor:'#bf5fff', name:'NEON PLAZA',     guideId:'gr-rock'  });
+
+// ── Background city filler buildings ──────────────────────────
+function addFiller(x, z, w, d, h) {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  const mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color().setHSL(0.6, 0.1, 0.04 + Math.random() * 0.04),
+    roughness: 0.8, metalness: 0.2
+  });
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, h / 2, z);
+  m.castShadow = true;
+  scene.add(m);
+
+  // Tiny always-on windows
+  const wTex = makeWindowTexture(
+    Math.floor(h / 3), Math.floor(w / 2),
+    `hsl(${200 + Math.random()*60},30%,55%)`, 0.3
+  );
+  mat.emissiveMap = wTex;
+  mat.emissive = new THREE.Color().setHSL(0.6, 0.2, 0.3);
+  mat.emissiveIntensity = 0.06 + Math.random() * 0.06;
+}
+
+const fillerData = [
+  [-50,0,8,8,20],[-50,20,6,6,14],[-50,-20,10,8,30],[-50,-40,7,7,18],
+  [50,0,9,7,22],[50,20,6,8,16],[50,-20,11,9,28],[50,-40,8,6,12],
+  [-35,-35,7,7,16],[-20,-35,9,8,24],[0,-35,8,10,18],[20,-35,10,7,32],
+  [35,-35,7,9,20],[45,-10,8,7,15],[45,10,6,8,20],[45,30,9,7,25],
+  [-45,-10,7,8,18],[-45,10,8,6,22],[-45,30,10,9,14],
+  [-30,35,8,8,20],[-15,35,7,7,16],[5,35,9,9,28],[22,35,8,7,12],[38,35,6,8,18],
+  [-60,10,6,6,10],[-60,-10,7,7,14],[60,10,5,6,11],[60,-10,7,5,16],
+  [12,-30,7,8,15],[-12,-30,8,7,22],[-28,10,6,7,12],[30,-20,7,6,19],
+];
+fillerData.forEach(([x,z,w,d,h]) => addFiller(x,z,w,d,h));
+
+// ── Street lamps ──
+function addLamp(x, z) {
+  const poleGeo = new THREE.CylinderGeometry(0.1, 0.12, 6, 6);
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0x1a2030, metalness: 0.8, roughness: 0.3 });
+  const pole = new THREE.Mesh(poleGeo, poleMat);
+  pole.position.set(x, 3, z);
+  scene.add(pole);
+
+  const light = new THREE.PointLight(0xffa050, 0.6, 18, 2);
+  light.position.set(x, 6.2, z);
+  scene.add(light);
+
+  const bulbGeo = new THREE.SphereGeometry(0.2, 8, 8);
+  const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffd090 });
+  const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+  bulb.position.set(x, 6.2, z);
+  scene.add(bulb);
+}
+
+for (let x = -90; x <= 90; x += 30) { addLamp(x - 12, -12); addLamp(x - 12, 12); }
+for (let z = -90; z <= 90; z += 30) { addLamp(-12, z - 12); addLamp(12, z - 12); }
+
+// ── Stars (distant, faint) ──
+const starGeo = new THREE.BufferGeometry();
+const spos = new Float32Array(3000 * 3);
+for (let i = 0; i < 3000; i++) {
+  spos[i*3]   = (Math.random()-0.5)*800;
+  spos[i*3+1] = Math.random()*300 + 10;
+  spos[i*3+2] = (Math.random()-0.5)*800;
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(spos, 3));
+scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({
+  color: 0xaabbdd, size: 0.4, transparent: true, opacity: 0.5,
+  depthWrite: false, sizeAttenuation: true,
+})));
+
+// ═══════════════════════════════════════════════════════════════
+//  GESTURE → BUILDING MAP
+// ═══════════════════════════════════════════════════════════════
+const GESTURE_MAP = {
+  'Open_Palm':   { buildingId: 'open',  emoji: '🖐', guideId: 'gr-open'  },
+  'Pointing_Up': { buildingId: 'point', emoji: '👆', guideId: 'gr-point' },
+  'Closed_Fist': { buildingId: 'fist',  emoji: '✊', guideId: 'gr-fist'  },
+  'Victory':     { buildingId: 'peace', emoji: '✌️', guideId: 'gr-peace' },
+  'Thumb_Up':    { buildingId: 'thumb', emoji: '👍', guideId: 'gr-thumb' },
+  'ILoveYou':    { buildingId: 'rock',  emoji: '🤘', guideId: 'gr-rock'  },
+};
+
+let activeGesture = null;
+let activeBuildingId = null;
+
+function setActiveBuilding(gesture) {
+  const map = GESTURE_MAP[gesture];
+  const newId = map ? map.buildingId : null;
+
+  if (newId === activeBuildingId) return;
+  activeBuildingId = newId;
+
+  // Update guide rows
+  document.querySelectorAll('.g-row').forEach(r => r.classList.remove('lit'));
+
+  const nameEl  = document.getElementById('building-name');
+  const subEl   = document.getElementById('gesture-sub');
+
+  if (newId) {
+    const b = KEY_BUILDINGS.find(b => b.id === newId);
+    document.getElementById(map.guideId)?.classList.add('lit');
+
+    nameEl.textContent = b.name;
+    nameEl.style.setProperty('--glow', b.lightColor);
+    nameEl.style.color = b.lightColor;
+    subEl.textContent  = `${map.emoji}  ILLUMINATED`;
+    nameEl.classList.add('show');
+    subEl.classList.add('show');
+  } else {
+    nameEl.classList.remove('show');
+    subEl.classList.remove('show');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ANIMATION
+// ═══════════════════════════════════════════════════════════════
+let time = 0;
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function animate() {
+  requestAnimationFrame(animate);
+  time += 0.005;
+
+  // Slow orbit
+  camAngle += 0.0008;
+  camera.position.x = Math.sin(camAngle) * 90;
+  camera.position.z = Math.cos(camAngle) * 90;
+  camera.position.y = 38 + Math.sin(camAngle * 0.5) * 4;
+  camera.lookAt(0, 12, 0);
+
+  // Update each key building
+  KEY_BUILDINGS.forEach(b => {
+    const isLit = b.id === activeBuildingId;
+    b.intensity = lerp(b.intensity, isLit ? 1.0 : 0.0, 0.04);
+
+    // Pulse when lit
+    const pulse = isLit ? 0.85 + Math.sin(time * 4) * 0.15 : 1.0;
+    const eff = b.intensity * pulse;
+
+    b.mat.emissiveIntensity = eff * 0.55;
+    b.ptLight.intensity = eff * 5.0;
+    b.ptLight.distance = 60 + eff * 30;
+    b.halo.material.opacity = eff * 0.12;
+
+    // Slight color tint on the building body
+    const dark = new THREE.Color(0x0d1520);
+    const lit  = new THREE.Color(b.lightColor).multiplyScalar(0.18);
+    b.mat.color.lerpColors(dark, lit, b.intensity);
+  });
+
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  MEDIAPIPE
+// ═══════════════════════════════════════════════════════════════
+const video     = document.getElementById('webcam');
+const handCv    = document.getElementById('hand-canvas');
+const handCtx   = handCv.getContext('2d');
+const statusEl  = document.getElementById('status');
+
+let gestureRecognizer = null;
+let lastVideoTime = -1;
+let currentGesture = 'none';
+let drawingUtils;
+
+async function initMediaPipe() {
+  try {
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+    );
+    gestureRecognizer = await GestureRecognizer.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task",
+        delegate: "GPU"
+      },
+      runningMode: "VIDEO",
+      numHands: 1,
+    });
+
+    drawingUtils = new DrawingUtils(handCtx);
+
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 } });
+    video.srcObject = stream;
+    video.addEventListener('loadeddata', () => {
+      statusEl.textContent = 'HAND TRACKING ACTIVE';
+      statusEl.className = 'ready';
+      detectLoop();
+    });
+  } catch(e) {
+    statusEl.textContent = 'CAMERA ERROR — CHECK PERMISSIONS';
+    statusEl.className = 'error';
+    console.error(e);
+  }
+}
+
+function detectLoop() {
+  if (video.currentTime !== lastVideoTime) {
+    lastVideoTime = video.currentTime;
+    handCv.width  = video.videoWidth;
+    handCv.height = video.videoHeight;
+
+    const results = gestureRecognizer.recognizeForVideo(video, performance.now());
+    handCtx.clearRect(0, 0, handCv.width, handCv.height);
+
+    let detected = 'none';
+
+    if (results.landmarks?.length > 0) {
+      for (const lm of results.landmarks) {
+        drawingUtils.drawConnectors(lm, GestureRecognizer.HAND_CONNECTIONS,
+          { color: 'rgba(255,255,255,0.2)', lineWidth: 1 });
+        drawingUtils.drawLandmarks(lm,
+          { color: 'rgba(255,255,255,0.7)', radius: 2, lineWidth: 1 });
+      }
+    }
+
+    if (results.gestures?.length > 0 && results.gestures[0]?.[0]?.score > 0.75) {
+      detected = results.gestures[0][0].categoryName;
+    }
+
+    if (detected !== currentGesture) {
+      currentGesture = detected;
+      setActiveBuilding(currentGesture);
+    }
+  }
+  requestAnimationFrame(detectLoop);
+}
+
+initMediaPipe();
+</script>
+</body>
+</html>
