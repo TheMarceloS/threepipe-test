@@ -4,6 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GESTURE TOKYO</title>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js",
+    "three/examples/jsm/loaders/GLTFLoader.js": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/GLTFLoader.js",
+    "three/examples/jsm/loaders/DRACOLoader.js": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/DRACOLoader.js"
+  }
+}
+</script>
+
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@300;400;700&family=Bebas+Neue&display=swap');
 
@@ -49,7 +60,6 @@
   #badge {
     position: fixed; top: 28px; left: 50%; transform: translateX(-50%);
     z-index: 10; text-align: center; pointer-events: none;
-    transition: opacity 0.4s;
   }
   #bldg-name {
     font-family: 'Bebas Neue', sans-serif;
@@ -115,21 +125,18 @@
 <canvas id="three-canvas"></canvas>
 <div id="vig"></div>
 
-<!-- Loading screen -->
 <div id="loader">
   <div id="loader-title">GESTURE TOKYO</div>
   <div id="loader-bar-track"><div id="loader-bar-fill"></div></div>
   <div id="loader-sub">LOADING MODEL…</div>
 </div>
 
-<!-- Model error fallback -->
 <div id="model-error">
   <h2>MODEL LOAD FAILED</h2>
-  <p>The LittlestTokyo.glb couldn't be fetched — this usually means the file needs to be served locally.<br><br>
-  Save this HTML file, then run a local server in the same folder as <code>LittlestTokyo.glb</code>:<br><br>
+  <p>Place <code>LittlestTokyo.glb</code> in the same folder as this HTML file and serve with:<br><br>
   <code>python3 -m http.server 8080</code><br><br>
   Then open <code>http://localhost:8080</code> in Chrome.<br><br>
-  Download the model free from:<br>
+  Download the model from:<br>
   <code>github.com/mrdoob/three.js → examples/models/gltf/LittlestTokyo.glb</code>
   </p>
 </div>
@@ -155,24 +162,12 @@
   <canvas id="hand-canvas"></canvas>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script>
-// Load Three.js addons from CDN
-function loadScript(src) {
-  return new Promise((res, rej) => {
-    const s = document.createElement('script');
-    s.src = src; s.onload = res; s.onerror = rej;
-    document.head.appendChild(s);
-  });
-}
-</script>
 <script type="module">
+import * as THREE from 'three';
+import { GLTFLoader }  from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { GestureRecognizer, FilesetResolver, DrawingUtils }
-  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs";
-
-// ── Load GLTFLoader + DRACOLoader from CDN ──────────────────────
-const { GLTFLoader }  = await import('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/GLTFLoader.js');
-const { DRACOLoader } = await import('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/DRACOLoader.js');
+  from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs';
 
 // ═══════════════════════════════════════════════════════════════
 //  SCENE
@@ -203,24 +198,18 @@ moonLight.position.set(-5, 10, 5);
 moonLight.castShadow = true;
 scene.add(moonLight);
 
-// Warm street bounce
-const bounceLight = new THREE.HemisphereLight(0x223355, 0x332211, 0.5);
-scene.add(bounceLight);
+scene.add(new THREE.HemisphereLight(0x223355, 0x332211, 0.5));
 
 // ═══════════════════════════════════════════════════════════════
-//  GESTURE → LIGHT ZONES
-//  These lights are placed at key areas of the LittlestTokyo
-//  model (which spans roughly -2..2 on X, 0..4 on Y, -2..2 on Z
-//  at default scale). We spread coloured point lights across
-//  different quadrants to illuminate different "districts".
+//  GESTURE ZONES
 // ═══════════════════════════════════════════════════════════════
 const ZONES = [
-  { id:'open',  name:'TOWER BLOCK',  color:0x5ecfff, hex:'#5ecfff', pos:[-1.2, 1.5, -0.8], guideId:'g-open'  },
-  { id:'point', name:'PAGODA',       color:0xff6b35, hex:'#ff6b35', pos:[ 1.0, 2.0,  0.2], guideId:'g-point' },
-  { id:'fist',  name:'MARKET ST',    color:0xff3366, hex:'#ff3366', pos:[ 0.2, 0.4,  1.2], guideId:'g-fist'  },
-  { id:'peace', name:'GARDEN',       color:0x88ff55, hex:'#88ff55', pos:[-0.8, 0.6,  0.8], guideId:'g-peace' },
-  { id:'thumb', name:'STATION',      color:0xffd700, hex:'#ffd700', pos:[ 0.0, 1.0, -1.2], guideId:'g-thumb' },
-  { id:'rock',  name:'NEON STRIP',   color:0xcc55ff, hex:'#cc55ff', pos:[ 1.5, 0.8,  1.0], guideId:'g-rock'  },
+  { id:'open',  name:'TOWER BLOCK', color:0x5ecfff, hex:'#5ecfff', pos:[-1.2, 1.5, -0.8], guideId:'g-open'  },
+  { id:'point', name:'PAGODA',      color:0xff6b35, hex:'#ff6b35', pos:[ 1.0, 2.0,  0.2], guideId:'g-point' },
+  { id:'fist',  name:'MARKET ST',   color:0xff3366, hex:'#ff3366', pos:[ 0.2, 0.4,  1.2], guideId:'g-fist'  },
+  { id:'peace', name:'GARDEN',      color:0x88ff55, hex:'#88ff55', pos:[-0.8, 0.6,  0.8], guideId:'g-peace' },
+  { id:'thumb', name:'STATION',     color:0xffd700, hex:'#ffd700', pos:[ 0.0, 1.0, -1.2], guideId:'g-thumb' },
+  { id:'rock',  name:'NEON STRIP',  color:0xcc55ff, hex:'#cc55ff', pos:[ 1.5, 0.8,  1.0], guideId:'g-rock'  },
 ];
 
 const GESTURE_MAP = {
@@ -232,17 +221,14 @@ const GESTURE_MAP = {
   'ILoveYou':    'rock',
 };
 
-// Create one point light per zone (all start off)
 ZONES.forEach(z => {
   z.light = new THREE.PointLight(z.color, 0, 4, 1.8);
   z.light.position.set(...z.pos);
   z.intensity = 0;
   scene.add(z.light);
 
-  // Small glow sphere at light position (always slightly visible)
-  const gGeo = new THREE.SphereGeometry(0.04, 8, 8);
   const gMat = new THREE.MeshBasicMaterial({ color: z.color, transparent: true, opacity: 0 });
-  z.glowMesh = new THREE.Mesh(gGeo, gMat);
+  z.glowMesh = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), gMat);
   z.glowMesh.position.set(...z.pos);
   scene.add(z.glowMesh);
 });
@@ -250,10 +236,10 @@ ZONES.forEach(z => {
 // ═══════════════════════════════════════════════════════════════
 //  LOAD MODEL
 // ═══════════════════════════════════════════════════════════════
-const loaderEl    = document.getElementById('loader');
-const loaderFill  = document.getElementById('loader-bar-fill');
-const loaderSub   = document.getElementById('loader-sub');
-const errorEl     = document.getElementById('model-error');
+const loaderEl   = document.getElementById('loader');
+const loaderFill = document.getElementById('loader-bar-fill');
+const loaderSub  = document.getElementById('loader-sub');
+const errorEl    = document.getElementById('model-error');
 
 const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/draco/gltf/');
@@ -261,7 +247,6 @@ dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/
 const gltfLoader = new GLTFLoader();
 gltfLoader.setDRACOLoader(dracoLoader);
 
-// Try multiple CDN sources for the model
 const MODEL_URLS = [
   'LittlestTokyo.glb',
   'https://raw.githubusercontent.com/mrdoob/three.js/r128/examples/models/gltf/LittlestTokyo.glb',
@@ -269,12 +254,11 @@ const MODEL_URLS = [
 ];
 
 let mixer = null;
-let modelLoaded = false;
 
 async function tryLoadModel(urls) {
   for (const url of urls) {
     try {
-      loaderSub.textContent = 'FETCHING MODEL…';
+      loaderSub.textContent = `TRYING ${url.startsWith('http') ? 'CDN' : 'LOCAL'}…`;
       const gltf = await new Promise((resolve, reject) => {
         gltfLoader.load(
           url,
@@ -290,56 +274,45 @@ async function tryLoadModel(urls) {
         );
       });
 
-      // Success — set up model
       const model = gltf.scene;
 
-      // Centre and scale the model nicely
-      const box = new THREE.Box3().setFromObject(model);
+      // Centre + scale
+      const box    = new THREE.Box3().setFromObject(model);
       const center = box.getCenter(new THREE.Vector3());
       const size   = box.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z);
-      const scale  = 6 / maxDim;
+      const scale  = 6 / Math.max(size.x, size.y, size.z);
 
       model.scale.setScalar(scale);
       model.position.sub(center.multiplyScalar(scale));
       model.position.y = 0;
 
-      // Enhance materials for night feel
+      // Enhance materials
       model.traverse(child => {
         if (child.isMesh && child.material) {
           const mats = Array.isArray(child.material) ? child.material : [child.material];
           mats.forEach(m => {
-            if (m.isMeshStandardMaterial || m.isMeshPhongMaterial) {
-              m.envMapIntensity = 0.3;
-            }
-            // Boost emissive on any windows/signs
-            if (m.emissive && m.emissiveIntensity > 0) {
-              m.emissiveIntensity *= 1.8;
-            }
+            if (m.isMeshStandardMaterial) m.envMapIntensity = 0.3;
+            if (m.emissive && m.emissiveIntensity > 0) m.emissiveIntensity *= 1.8;
           });
-          child.castShadow = true;
+          child.castShadow    = true;
           child.receiveShadow = true;
         }
       });
 
       scene.add(model);
 
-      // Animations (the model has a built-in animation)
       if (gltf.animations?.length > 0) {
         mixer = new THREE.AnimationMixer(model);
-        gltf.animations.forEach(clip => {
-          mixer.clipAction(clip).play();
-        });
+        gltf.animations.forEach(clip => mixer.clipAction(clip).play());
       }
 
-      modelLoaded = true;
       loaderFill.style.width = '100%';
-      loaderSub.textContent = 'READY';
+      loaderSub.textContent  = 'READY';
       setTimeout(() => loaderEl.classList.add('hidden'), 600);
       return true;
 
-    } catch (e) {
-      console.warn(`Failed to load from ${url}:`, e);
+    } catch(e) {
+      console.warn(`Could not load ${url}:`, e);
     }
   }
   return false;
@@ -349,7 +322,6 @@ tryLoadModel(MODEL_URLS).then(success => {
   if (!success) {
     loaderEl.classList.add('hidden');
     errorEl.classList.add('show');
-    // Still start camera etc so MediaPipe works
   }
 });
 
@@ -364,28 +336,25 @@ function lerp(a, b, t) { return a + (b - a) * t; }
 
 function animate() {
   requestAnimationFrame(animate);
-  const delta = clock.getDelta();
+  const delta   = clock.getDelta();
   const elapsed = clock.elapsedTime;
 
   if (mixer) mixer.update(delta * 0.6);
 
-  // Slow camera orbit — tighter, looking down at the model
   camAngle += 0.0006;
-  const radius = 8;
-  camera.position.x = Math.sin(camAngle) * radius;
-  camera.position.z = Math.cos(camAngle) * radius;
+  camera.position.x = Math.sin(camAngle) * 8;
+  camera.position.z = Math.cos(camAngle) * 8;
   camera.position.y = 3.5 + Math.sin(camAngle * 0.4) * 0.5;
   camera.lookAt(0, 1.2, 0);
 
-  // Update zone lights
   ZONES.forEach(z => {
     const isActive = z.id === activeZoneId;
-    const pulse = isActive ? 0.82 + Math.sin(elapsed * 3.5) * 0.18 : 1.0;
-    z.intensity = lerp(z.intensity, isActive ? 1.0 : 0.0, 0.05);
+    const pulse    = isActive ? 0.82 + Math.sin(elapsed * 3.5) * 0.18 : 1.0;
+    z.intensity    = lerp(z.intensity, isActive ? 1.0 : 0.0, 0.05);
+    const eff      = z.intensity * pulse;
 
-    const eff = z.intensity * pulse;
-    z.light.intensity = eff * 3.5;
-    z.light.distance  = 4 + eff * 3;
+    z.light.intensity           = eff * 3.5;
+    z.light.distance            = 4 + eff * 3;
     z.glowMesh.material.opacity = eff * 0.9;
   });
 
@@ -415,13 +384,11 @@ function activateZone(zoneId) {
   if (zoneId) {
     const z = ZONES.find(z => z.id === zoneId);
     document.getElementById(z.guideId)?.classList.add('on');
-
-    nameEl.textContent  = z.name;
-    nameEl.style.color  = z.hex;
-    subEl.textContent   = '— ILLUMINATED —';
+    nameEl.textContent = z.name;
+    nameEl.style.color = z.hex;
+    subEl.textContent  = '— ILLUMINATED —';
     nameEl.classList.add('show');
     subEl.classList.add('show');
-
     clearTimeout(nameFadeTimer);
     nameFadeTimer = setTimeout(() => {
       nameEl.classList.remove('show');
@@ -467,12 +434,12 @@ async function initMediaPipe() {
     video.srcObject = stream;
     video.addEventListener('loadeddata', () => {
       statusEl.textContent = 'HAND TRACKING ACTIVE';
-      statusEl.className = 'ready';
+      statusEl.className   = 'ready';
       detectLoop();
     });
   } catch(e) {
     statusEl.textContent = 'CAMERA ERROR — CHECK PERMISSIONS';
-    statusEl.className = 'error';
+    statusEl.className   = 'error';
     console.error(e);
   }
 }
@@ -502,8 +469,7 @@ function detectLoop() {
 
     if (detected !== currentGesture) {
       currentGesture = detected;
-      const zoneId = GESTURE_MAP[detected] ?? null;
-      activateZone(zoneId);
+      activateZone(GESTURE_MAP[detected] ?? null);
     }
   }
   requestAnimationFrame(detectLoop);
